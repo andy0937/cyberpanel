@@ -30,6 +30,21 @@ VIRT_TYPE=""
 GIT_URL="github.com/usmannasir/cyberpanel"
 GIT_CONTENT_URL="raw.githubusercontent.com/usmannasir/cyberpanel"
 
+calc_disk() {
+    local total_size=0
+    local array=$@
+    for size in ${array[@]}
+    do
+        [ "${size}" == "0" ] && size_t=0 || size_t=`echo ${size:0:${#size}-1}`
+        [ "`echo ${size:(-1)}`" == "K" ] && size=0
+        [ "`echo ${size:(-1)}`" == "M" ] && size=$( awk 'BEGIN{printf "%.1f", '$size_t' / 1024}' )
+        [ "`echo ${size:(-1)}`" == "T" ] && size=$( awk 'BEGIN{printf "%.1f", '$size_t' * 1024}' )
+        [ "`echo ${size:(-1)}`" == "G" ] && size=${size_t}
+        total_size=$( awk 'BEGIN{printf "%.1f", '$total_size' + '$size'}' )
+    done
+    echo ${total_size}
+}
+#credit for bench.sh
 
 check_return() {
 #check previous command result , 0 = ok ,  non-0 = something wrong.
@@ -803,13 +818,16 @@ esac
 
 interactive_install() {
 RAM=$(free -m | awk 'NR==2{printf "%s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }')
-DISK=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)\n", $3,$2,$5}')
+disk_size1=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|devtmpfs|by-uuid|chroot|Filesystem|udev|docker' | awk '{print $2}' ))
+disk_size2=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|devtmpfs|by-uuid|chroot|Filesystem|udev|docker' | awk '{print $3}' ))
+disk_total_size=$( calc_disk "${disk_size1[@]}" )
+disk_used_size=$( calc_disk "${disk_size2[@]}" )
 #clear
 echo -e "		CyberPanel Installer v$CP_VER1$CP_VER2
 
   RAM check : $RAM
 
-  Disk check : $DISK (Minimal \e[31m10GB\e[39m free space)
+  Disk check : $disk_total_size GB ($disk_used_size GB Used) (Minimal \e[31m10GB\e[39m free space)
 
   1. Install CyberPanel with \e[31mOpenLiteSpeed\e[39m.
 
@@ -1228,7 +1246,6 @@ rm -rf /etc/profile.d/cyberpanel*
 curl --silent -o /etc/profile.d/cyberpanel.sh https://cyberpanel.sh/?banner 2>/dev/null
 chmod +x /etc/profile.d/cyberpanel.sh
 RAM2=$(free -m | awk 'NR==2{printf "%s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }')
-DISK2=$(df -h | awk '$NF=="/"{printf "%d/%dGB (%s)\n", $3,$2,$5}')
 ELAPSED="$(($SECONDS / 3600)) hrs $((($SECONDS / 60) % 60)) min $(($SECONDS % 60)) sec"
 MYSQLPASSWD=$(cat /etc/cyberpanel/mysqlPassword)
 echo "$ADMIN_PASS" > /etc/cyberpanel/adminPass
@@ -1299,11 +1316,16 @@ fi
 		fi
 #fix php.ini &amp; issue
 
+disk_size1=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|devtmpfs|by-uuid|chroot|Filesystem|udev|docker' | awk '{print $2}' ))
+disk_size2=($( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|devtmpfs|by-uuid|chroot|Filesystem|udev|docker' | awk '{print $3}' ))
+disk_total_size=$( calc_disk "${disk_size1[@]}" )
+disk_used_size=$( calc_disk "${disk_size2[@]}" )
+
 clear
 echo "###################################################################"
 echo "                CyberPanel Successfully Installed                  "
 echo "                                                                   "
-echo "                Current Disk usage : $DISK2                        "
+echo "                Current Disk usage : $disk_total_size GB ($disk_used_size GB Used)                        "
 echo "                                                                   "
 echo "                Current RAM  usage : $RAM2                         "
 echo "                                                                   "
